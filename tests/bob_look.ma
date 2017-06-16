@@ -1,0 +1,80 @@
+//Maya ASCII 2016 scene
+//Name: bob_look.ma
+//Last modified: Tue, Jan 19, 2016 07:30:28 PM
+//Codeset: 1252
+requires maya "2016";
+currentUnit -l centimeter -a degree -t film;
+fileInfo "application" "maya";
+fileInfo "product" "Maya 2016";
+fileInfo "version" "2016";
+fileInfo "cutIdentifier" "201502261600-953408";
+fileInfo "osv" "Microsoft Windows 8 Business Edition, 64-bit  (Build 9200)\n";
+createNode blinn -n "body_mat";
+	rename -uid "422D6450-4893-B605-49AA-C4A42346CC70";
+	addAttr -ci true -sn "defaultAssignment" -ln "defaultAssignment" -dt "string";
+	setAttr -av ".dc";
+	setAttr -av ".cr";
+	setAttr -av ".cg";
+	setAttr ".it" -type "float3" 0.37062639 0.37062639 0.37062639 ;
+	setAttr ".ambc" -type "float3" 0.472 0.015104002 0.015104002 ;
+	setAttr -l on ".defaultAssignment" -type "string" "{\"mesh\": \"bob_geo:body2\"}";
+createNode blinn -n "legs_mat";
+	rename -uid "BE8BF7D2-4978-287C-0A61-88841EDBE9DD";
+	addAttr -ci true -sn "defaultAssignment" -ln "defaultAssignment" -dt "string";
+	setAttr ".c" -type "float3" 0 0.11538327 0.5 ;
+	setAttr -l on ".defaultAssignment" -type "string" "{\"mesh\": \"bob_geo:legs4\"}";
+createNode fractal -n "fractal1";
+	rename -uid "6A152D8E-460A-A681-14B6-778E499096DA";
+createNode place2dTexture -n "place2dTexture1";
+	rename -uid "94D6D9F2-46A4-E30A-0A8E-3AA865EDA184";
+createNode animCurveTU -n "ben_shader:blinn1_colorR";
+	rename -uid "50E89956-4898-4FBB-E4F0-78809293E889";
+	setAttr ".tan" 9;
+	setAttr ".wgt" no;
+createNode animCurveTU -n "ben_shader:blinn1_colorG";
+	rename -uid "C9359E1C-42EB-459F-DAD5-3CAFC13AD8B1";
+	setAttr ".tan" 9;
+	setAttr ".wgt" no;
+select -ne :time1;
+	setAttr ".o" 1;
+	setAttr ".unw" 1;
+select -ne :hardwareRenderingGlobals;
+	setAttr ".otfna" -type "stringArray" 22 "NURBS Curves" "NURBS Surfaces" "Polygons" "Subdiv Surface" "Particles" "Particle Instance" "Fluids" "Strokes" "Image Planes" "UI" "Lights" "Cameras" "Locators" "Joints" "IK Handles" "Deformers" "Motion Trails" "Components" "Hair Systems" "Follicles" "Misc. UI" "Ornaments"  ;
+	setAttr ".otfva" -type "Int32Array" 22 0 1 1 1 1 1
+		 1 1 1 0 0 0 0 0 0 0 0 0
+		 0 0 0 0 ;
+	setAttr ".fprt" yes;
+select -ne :renderPartition;
+	setAttr -s 5 ".st";
+select -ne :renderGlobalsList1;
+select -ne :defaultShaderList1;
+	setAttr -s 6 ".s";
+select -ne :postProcessList1;
+	setAttr -s 2 ".p";
+select -ne :defaultRenderUtilityList1;
+select -ne :defaultRenderingList1;
+	setAttr -s 2 ".r";
+select -ne :defaultTextureList1;
+select -ne :lambert1;
+	addAttr -ci true -sn "defaultAssignment" -ln "defaultAssignment" -dt "string";
+	setAttr -l on ".defaultAssignment" -type "string" "{\"mesh\": \"bob\"}";
+select -ne :initialShadingGroup;
+	setAttr ".ro" yes;
+select -ne :initialParticleSE;
+	setAttr ".ro" yes;
+select -ne :defaultResolution;
+	setAttr ".pa" 1;
+select -ne :hardwareRenderGlobals;
+	setAttr ".ctrs" 256;
+	setAttr ".btrs" 512;
+connectAttr "fractal1.oc" "body_mat.c";
+connectAttr "ben_shader:blinn1_colorR.o" "body_mat.cr";
+connectAttr "ben_shader:blinn1_colorG.o" "body_mat.cg";
+connectAttr "place2dTexture1.o" "fractal1.uv";
+connectAttr "place2dTexture1.ofs" "fractal1.fs";
+connectAttr "legs_mat.msg" ":defaultShaderList1.s" -na;
+connectAttr "body_mat.msg" ":defaultShaderList1.s" -na;
+connectAttr "place2dTexture1.msg" ":defaultRenderUtilityList1.u" -na;
+connectAttr "fractal1.msg" ":defaultTextureList1.tx" -na;
+connectAttr "body_mat.oc" ":internal_standInShader.ic";
+// End of bob_look.ma
