@@ -32,7 +32,7 @@ def export_shader(nodes, output_file):
                     pynode = pm.PyNode(node)
                     transformNode = pm.listRelatives(pynode, type='transform',p=True)[0]
                     assignData = {
-                        'nameid': transformNode.nameid.get(),
+                        'assetid': transformNode.assetid.get(),
                         }
 
                     print "Python data to store to Maya shader.attr:"
@@ -111,6 +111,10 @@ def hookup_shaders(meshes=None, shaders=None):
     if not shaders:
         shaders = pm.ls(materials=True)
 
+    # Apply collected shaders to meshes
+    if not meshes:
+        meshes = pm.ls(type='mesh')
+
     # get all shaders
     for shader in shaders:
         #filter out shaders with defaultAssignment
@@ -119,34 +123,41 @@ def hookup_shaders(meshes=None, shaders=None):
 
         attr = shader.defaultAssignment.get()
         defaultAssignment = attrToPy(attr)
-        mesh_name = defaultAssignment['mesh']
-        obj_pattern = "^" + mesh_name + "\d*$"
+        print defaultAssignment
+        for key in defaultAssignment:
+            for mesh in meshes:
+                transform = pm.listRelatives(mesh, type='transform',p=True)[0]
+                if transform.hasAttr(key):
+                    if transform.attr(key).get() == defaultAssignment[key]:
+                        pm.select(transform, replace=True)
+                        pm.hyperShade(assign=shader)
+            print defaultAssignment[key]
+        # mesh_name = defaultAssignment['assetid']
+        # obj_pattern = "^" + mesh_name.split('/')[1] + "\d*$"
+        # print 'obj pattern: {}'.format(obj_pattern)
+        # shader_hookups[obj_pattern] = shader
 
-        shader_hookups[obj_pattern] = shader
-
-    print 'shaders to Hookup: {}'.format(shader_hookups)
+    # print 'shaders to Hookup: {}'.format(shader_hookups)
 
 
-    # Apply collected shaders to meshes
-    if not meshes:
-        meshes = pm.ls(type='mesh')
+
     # meshnodes = cmds.referenceQuery(reference_node, nodes=True):
 
-    for node in meshes:
-        node = pm.listRelatives(node, type='transform',p=True)[0]
-        for (obj_pattern, shader) in shader_hookups.iteritems():
-            if re.match(obj_pattern, node.name(), re.IGNORECASE):
-                # assign the shader to the object
-                # cmds.file(unloadReference=reference_node, force=True)
-                # cmds.setAttr(reference_node + ".locked", False)
-                # cmds.file(loadReference=reference_node)
-                pm.select(node, replace=True)
-                pm.hyperShade(assign=shader)
-                # cmds.file(unloadReference=reference_node)
-                # cmds.setAttr(reference_node + ".locked", True)
-                # cmds.file(loadReference=reference_node)
-            else:
-                print "NODE: " + node + " doesn't match " + obj_pattern
+    # for node in meshes:
+    #     node = pm.listRelatives(node, type='transform',p=True)[0]
+    #     for (obj_pattern, shader) in shader_hookups.iteritems():
+    #         if re.match(obj_pattern, node.name(), re.IGNORECASE):
+    #             # assign the shader to the object
+    #             # cmds.file(unloadReference=reference_node, force=True)
+    #             # cmds.setAttr(reference_node + ".locked", False)
+    #             # cmds.file(loadReference=reference_node)
+    #             pm.select(node, replace=True)
+    #             pm.hyperShade(assign=shader)
+    #             # cmds.file(unloadReference=reference_node)
+    #             # cmds.setAttr(reference_node + ".locked", True)
+    #             # cmds.file(loadReference=reference_node)
+    #         else:
+    #             print "NODE: " + node + " doesn't match " + obj_pattern
 
 
 def pyToAttr(objAttr, data):
