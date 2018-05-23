@@ -1,203 +1,171 @@
-# Code courtesy of shotgun software
-import maya.cmds as cmds
-import json_to_attr as jta
 import pymel.core as pm
 import json
-import re
-import pprint
+from pprint import pprint
 
 
-def export_shader(nodes, output_file):
+def export_shaders(nodes, look_name, output_file):
 
     shading_groups = set()
     shaders = set()
 
     for node in nodes:
-        print "Processed mesh:" + node
-        if cmds.ls(node, dag=True, type="mesh"):
-            faces = cmds.polyListComponentConversion(node, toFace=True)
-            for shading_group in cmds.listSets(type=1, object=faces[0]):
-                print shading_group
+        shape = node.getShape()
+        if shape:
+            faces = pm.polyListComponentConversion(shape, toFace=True)
+            for shading_group in pm.listSets(type=1, object=faces[0]):
                 shading_groups.add(shading_group)
-
-                connections = cmds.listConnections(
+                connections = pm.listConnections(
                     shading_group, source=True, destination=False)
-
-                for shader in cmds.ls(connections, materials=True):
-                    print 'Shader: ' + shader
-                    shaders.add(shader)
-
-                    shaderAttr = '{}.defaultAssignment'.format(shader)
-
-                    pynode = pm.PyNode(node)
-                    transformNode = pm.listRelatives(pynode, type='transform',p=True)[0]
-                    assignData = {
-                        'assetid': transformNode.assetid.get(),
-                        }
-
-                    print "Python data to store to Maya shader.attr:"
-                    print assignData
-
-                    # Store data to our node:
-                    jta.pyToAttr(shaderAttr, assignData)
-
-    select_nodes = list(shaders)
-
-    cmds.select(select_nodes, replace=True)
-
-    # write a .ma file to the publish path with the shader network definitions
-    cmds.file(
-        output_file,
-        type='mayaAscii',
-        exportSelected=True,
-        options="v=0",
-        prompt=False,
-        force=True
-        )
-
-def store_shader():
-    shading_groups = set()
-    shaders = set()
+                for shader in pm.ls(connections, materials=True):
+                    try:
+                        shaderAttr = pm.Attribute('{}.shaderAssignment'.format(shader))
+                        shaderAttr.unlock()
+                        pm.deleteAttr(shaderAttr)
+                    except:
+                        pass
 
     for node in nodes:
-        print "Processed mesh:" + node
-        if cmds.ls(node, dag=True, type="mesh"):
-            faces = cmds.polyListComponentConversion(node, toFace=True)
-            for shading_group in cmds.listSets(type=1, object=faces[0]):
-                print shading_group
+        print "Processed mesh: " + node
+        shape = node.getShape()
+        if shape:
+            faces = pm.polyListComponentConversion(shape, toFace=True)
+            for shading_group in pm.listSets(type=1, object=faces[0]):
                 shading_groups.add(shading_group)
 
-                connections = cmds.listConnections(
+                connections = pm.listConnections(
                     shading_group, source=True, destination=False)
 
-                for shader in cmds.ls(connections, materials=True):
-                    print 'Shader: ' + shader
+                for shader in pm.ls(connections, materials=True):
                     shaders.add(shader)
 
-                    shaderAttr = '{}.defaultAssignment'.format(shader)
+                    shaderAttr = '{}.shaderAssignment'.format(shader)
 
-                    pynode = pm.PyNode(node)
-                    transformNode = pm.listRelatives(pynode, type='transform',p=True)[0]
-                    assignData = {
-                        'nameid': transformNode.nameid.get(),
-                        }
-
-                    print "Python data to store to Maya shader.attr:"
-                    print assignData
+                    assignData = {'assetid': []}
+                    if pm.objExists(shaderAttr):
+                        attr = pm.Attribute(shaderAttr)
+                        try:
+                            assignData = json.loads(attr.get())
+                        except:
+                            pass
+                        assignData['assetid'].append(node.assetid.get())
+                    else:
+                        assignData['assetid'].append(node.assetid.get())
 
                     # Store data to our node:
-                    jta.pyToAttr(shaderAttr, assignData)
+                    jsonToAttr(shaderAttr, assignData)
 
-    select_nodes = list(shaders)
+    select_nodes = list(shading_groups)
 
-    cmds.select(select_nodes, replace=True)
+    asset = export_render_attributes(nodes, look_name)
+
+    pm.select(select_nodes, replace=True, ne=True)
+    pm.select(asset, add=1)
 
     # write a .ma file to the publish path with the shader network definitions
-    cmds.file(
+    pm.exportSelected(
         output_file,
         type='mayaAscii',
-        exportSelected=True,
-        options="v=0",
-        prompt=False,
+        shader=True,
         force=True
         )
 
+    return select_nodes
 
-def hookup_shaders(meshes=None, shaders=None):
 
-    # hookup_prefix = "SHADER_HOOKUP_"
-    shader_hookups = {}
+def export_render_attributes(nodes, name):
+    attr_filter = ['castsShadows',
+                    'receiveShadows',
+                    'visibleInReflections',
+                    'visibleInRefractions',
+                    'doubleSided',
+                    'yetiSubdivision',
+                    'yetiSubdivisionIterations'
+                    ]
+
+    object_list = []
+
+    for node in nodes:
+        shape = node.getShape()
+        object_collection = {'transform': node.name(),
+                             'shape': shape.name(),
+                             'assetid': node.assetid.get(),
+                             'attributes': {}
+                             }
+        if shape:
+            for attr in shape.listAttr():
+                attr_name = attr.split('.')[1]
+                if attr_name in attr_filter or attr_name.startswith('ai'):
+                    object_collection['attributes'][attr_name] = attr.get()
+        object_list.append(object_collection)
+
+    asset = pm.createNode('container', n=name)
+    json_attr = '{}.lookAttributes'.format(asset)
+    pprint(object_list)
+    jsonToAttr(json_attr, object_list)
+
+    return asset
+
+
+def hookup_shaders(nodes=None, shaders=None):
 
     if not shaders:
         shaders = pm.ls(materials=True)
 
     # Apply collected shaders to meshes
-    if not meshes:
+    meshes = []
+    if nodes:
+        for node in nodes:
+            meshes.append(node.listRelatives(type='mesh'))
+    else:
         meshes = pm.ls(type='mesh')
 
     # get all shaders
     for shader in shaders:
-        #filter out shaders with defaultAssignment
-        if not shader.hasAttr('defaultAssignment'):
+        # filter out shaders with shaderAsisgnment
+        if not shader.hasAttr('shaderAssignment'):
             continue
 
-        attr = shader.defaultAssignment.get()
-        defaultAssignment = attrToPy(attr)
-        print defaultAssignment
-        for key in defaultAssignment:
+        shaderAssignment = json.loads(shader.shaderAssignment.get())
+        print shaderAssignment
+        for key in shaderAssignment:
             for mesh in meshes:
-                transform = pm.listRelatives(mesh, type='transform',p=True)[0]
+                transform = pm.listRelatives(mesh, type='transform', p=True)[0]
                 if transform.hasAttr(key):
-                    if transform.attr(key).get() == defaultAssignment[key]:
-                        pm.select(transform, replace=True)
-                        pm.hyperShade(assign=shader)
-            print defaultAssignment[key]
-        # mesh_name = defaultAssignment['assetid']
-        # obj_pattern = "^" + mesh_name.split('/')[1] + "\d*$"
-        # print 'obj pattern: {}'.format(obj_pattern)
-        # shader_hookups[obj_pattern] = shader
+                    for mesh_to_assign in shaderAssignment[key]:
+                        if transform.attr(key).get() == mesh_to_assign:
+                            print transform
+                            pm.select(transform, replace=True)
+                            pm.hyperShade(assign=shader)
+            print shaderAssignment[key]
 
-    # print 'shaders to Hookup: {}'.format(shader_hookups)
+def hookup_render_attributes(nodes=None):
+    looks = pm.ls(containers=True)
 
+    meshes = []
 
-
-    # meshnodes = cmds.referenceQuery(reference_node, nodes=True):
-
-    # for node in meshes:
-    #     node = pm.listRelatives(node, type='transform',p=True)[0]
-    #     for (obj_pattern, shader) in shader_hookups.iteritems():
-    #         if re.match(obj_pattern, node.name(), re.IGNORECASE):
-    #             # assign the shader to the object
-    #             # cmds.file(unloadReference=reference_node, force=True)
-    #             # cmds.setAttr(reference_node + ".locked", False)
-    #             # cmds.file(loadReference=reference_node)
-    #             pm.select(node, replace=True)
-    #             pm.hyperShade(assign=shader)
-    #             # cmds.file(unloadReference=reference_node)
-    #             # cmds.setAttr(reference_node + ".locked", True)
-    #             # cmds.file(loadReference=reference_node)
-    #         else:
-    #             print "NODE: " + node + " doesn't match " + obj_pattern
+    for look in looks:
+        if look.hasAttr('lookAttributes'):
+            look_attributes = json.loads(look.lookAttributes.get())
+            for subset in look_attributes:
+                for node in nodes:
+                    shape = node.getShape()
+                    if (node.hasAttr('assetid') and node.assetid.get() == subset['assetid']):
+                        for a in subset['attributes']:
+                            if shape.hasAttr(a):
+                                shape.attr(a).set(subset['attributes'][a])
 
 
-def pyToAttr(objAttr, data):
-    """
-    Write Python data to the given Maya obj.attr.  This data can
-    later be read back via attrToPy().
+def jsonToAttr(objAttr, data):
 
-    Arguments:
-    objAttr : string : a valid object.attribute name in the scene.  If the
-        object exists, but the attribute doesn't, the attribute will be added.
-        The if the attribute already exists, it must be of type 'string', so
-        the Python data can be written to it.
-    data : some Python data :  Data that will be serialised to the attribute
-        in question.
-    """
     obj, attr = objAttr.split('.')
     # Add the attr if it doesn't exist:
-    if not cmds.objExists(objAttr):
-        cmds.addAttr(obj, longName=attr, dataType='string')
+    if not pm.objExists(objAttr):
+        pm.addAttr(obj, longName=attr, dataType='string')
     # Make sure it is the correct type before modifing:
-    if cmds.getAttr(objAttr, type=True) != 'string':
-        raise Exception("Object '%s' already has an attribute called '%s', but it isn't type 'string'"%(obj,attr))
+    if pm.getAttr(objAttr, type=True) != 'string':
+        raise Exception("Object '{}' already has an attribute called '{}', but it isn't type 'string'".format(obj,attr))
 
-    # Serialise the data and return the coresponding string value:
     stringData = json.dumps(data)
-    # Make sure attr is unlocked before edit:
-    cmds.setAttr(objAttr, edit=True, lock=False)
-    # Set attr to string value:
-    cmds.setAttr(objAttr, stringData, type='string')
-    # And lock it for safety:
-    cmds.setAttr(objAttr, edit=True, lock=True)
-
-
-def attrToPy(objAttr):
-    """
-    Take previously stored (json) data on a Maya attribute (put there via
-    pyToAttr() ) and read it back to valid Python values.
-
-    """
-    objAttr = str(objAttr)
-    loadedData = json.loads(objAttr)
-
-    return loadedData
+    pm.setAttr(objAttr, edit=True, lock=False)
+    pm.setAttr(objAttr, stringData, type='string')
+    pm.setAttr(objAttr, edit=True, lock=True)
